@@ -24,11 +24,16 @@
   box-sizing: border-box;
 }
 
+html {
+  height: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden; /* Prevent body scroll, handle in app container */
 }
 
 /* Gradient Background */

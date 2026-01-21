@@ -8,9 +8,11 @@ from pydantic import BaseModel
 from typing import Optional
 
 from app.services.ollama_service import OllamaService
+from app.services.detection_service import DetectionService
 
 router = APIRouter()
 ollama_service = OllamaService()
+detection_service = DetectionService()
 
 
 class TranslationRequest(BaseModel):
@@ -100,3 +102,33 @@ async def translate_stream(request: TranslationRequest):
             yield chunk
     
     return StreamingResponse(generate(), media_type="text/event-stream")
+
+
+class DetectionRequest(BaseModel):
+    text: str
+
+
+@router.post("/detect")
+async def detect_language(request: DetectionRequest):
+    """
+    Detect language from text
+    """
+    if not request.text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+        
+    detected_code = detection_service.detect_language(request.text)
+    
+    # Map langdetect codes to our supported codes if necessary
+    # straightforward for most (en, ko, ja, zh-cn -> zh)
+    
+    lang_code = detected_code
+    if detected_code == "zh-cn" or detected_code == "zh-tw":
+        lang_code = "zh"
+    
+    # Check if supported, otherwise default to auto or keep as is
+    is_supported = lang_code in SUPPORTED_LANGUAGES
+    
+    return {
+        "detected": lang_code,
+        "is_supported": is_supported
+    }
