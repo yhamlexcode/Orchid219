@@ -99,3 +99,43 @@ class OllamaService:
         except Exception:
             pass
         return False
+
+    async def chat_stream(self, messages: list, model: str = None) -> AsyncGenerator[str, None]:
+        """
+        Stream chat response using specified model (default: DeepSeek-R1)
+        """
+        target_model = model or "deepseek-r1:32b"
+        
+        async with httpx.AsyncClient(timeout=300.0) as client:
+            async with client.stream(
+                "POST",
+                f"{self.base_url}/api/chat",
+                json={
+                    "model": target_model,
+                    "messages": messages,
+                    "stream": True,
+                    "options": {
+                        "temperature": 0.6,  # Slightly higher for creativity in chat
+                    }
+                }
+            ) as response:
+                async for line in response.aiter_lines():
+                    if line:
+                        # print(f"DEBUG: Received line: {line[:100]}...") # Uncomment for verbose debug
+                        try:
+                            data = json.loads(line)
+                            if "message" in data and "content" in data["message"]:
+                                content = data["message"]["content"]
+                                if content:
+                                    yield f"data: {json.dumps({'content': content})}\n\n"
+                            
+                            # Handle done status
+                            if data.get("done", False):
+                                yield "data: [DONE]\n\n"
+                                
+                        except json.JSONDecodeError:
+                            print(f"JSON Decode Error for line: {line}")
+                            continue
+                        except Exception as e:
+                            print(f"Error processing chunk: {e}")
+                            continue

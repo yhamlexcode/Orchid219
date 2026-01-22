@@ -20,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${inter.variable} antialiased`}>
+        <div className="absolute inset-0 bg-[url('/bg-orange.png')] bg-cover bg-center opacity-40 blur-3xl animate-pulse-slow"></div>
         {children}
       </body>
     </html>

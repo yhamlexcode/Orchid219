@@ -6,7 +6,7 @@ Local LLM Translation using TranslateGemma 12B
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import translation
+from app.routes import translation, chat
 
 app = FastAPI(
     title="Orchid219 Translation API",
@@ -25,6 +25,7 @@ app.add_middleware(
 
 # Register routes
 app.include_router(translation.router, prefix="/api", tags=["translation"])
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 
 
 @app.get("/")
