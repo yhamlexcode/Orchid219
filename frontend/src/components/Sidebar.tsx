@@ -31,12 +31,44 @@ const MENU_ITEMS = [
   },
   {
     id: "llama", label: "LLAMA 3.3", icon: (
-      // Meta Llama style icon
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-        <path d="M12 2C8.5 2 6 4.5 6 7c0 1.5.5 2.5 1 3.5-.5.5-1 1.5-1 2.5 0 1.5 1 3 2.5 3.5 0 1 .5 2 1.5 3 1 1 2.5 1.5 4 1.5s3-.5 4-1.5c1-1 1.5-2 1.5-3 1.5-.5 2.5-2 2.5-3.5 0-1-.5-2-1-2.5.5-1 1-2 1-3.5 0-2.5-2.5-5-6-5z" />
-        <circle cx="9.5" cy="8" r="1" />
-        <circle cx="14.5" cy="8" r="1" />
-        <path d="M9 12c0 0 1.5 2 3 2s3-2 3-2" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+      // Meta infinity logo
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <path d="M12 10.5c-1.5-2.5-3-4-5-4-2.5 0-4.5 2-4.5 4.5s2 4.5 4.5 4.5c2 0 3.5-1.5 5-4 1.5 2.5 3 4 5 4 2.5 0 4.5-2 4.5-4.5s-2-4.5-4.5-4.5c-2 0-3.5 1.5-5 4z" stroke="#0081FB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  },
+  {
+    id: "exaone", label: "ExaOne 4.0", icon: (
+      // ExaOne 3D arrow logo - simplified with gradient colors
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24">
+        <defs>
+          <linearGradient id="exaBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#6B7FFF" />
+            <stop offset="100%" stopColor="#A855F7" />
+          </linearGradient>
+          <linearGradient id="exaPink" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#EC4899" />
+            <stop offset="100%" stopColor="#A855F7" />
+          </linearGradient>
+          <linearGradient id="exaOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#F97316" />
+            <stop offset="100%" stopColor="#FB923C" />
+          </linearGradient>
+        </defs>
+        <path d="M12 2L20 8V10L12 6L4 10V8L12 2Z" fill="url(#exaBlue)" />
+        <path d="M4 10L4 16L6 17L6 12L12 8L4 10Z" fill="url(#exaPink)" />
+        <path d="M12 16L20 12V18L12 22L4 18V16L12 20L20 16V12L12 16Z" fill="url(#exaOrange)" />
+      </svg>
+    )
+  },
+  {
+    id: "debate", label: "AI Arena", icon: (
+      // Two bots conversing icon (simplified)
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M12 8V4H8" />
+        <rect x="4" y="8" width="8" height="8" rx="2" />
+        <path d="M20 16v4h-4" />
+        <rect x="12" y="12" width="8" height="8" rx="2" />
       </svg>
     )
   },
@@ -50,6 +82,7 @@ const MENU_ITEMS = [
       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
     )
   },
+
 ];
 
 export default function Sidebar({ activeId, onSelect }: SidebarProps) {
