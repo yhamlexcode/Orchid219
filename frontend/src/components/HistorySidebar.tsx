@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-
+import ConfirmModal from "./ConfirmModal";
 type Session = {
     id: string;
     title: string;
@@ -32,8 +32,10 @@ export default function HistorySidebar({
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState("");
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [sessionToDelete, setSessionToDelete] = useState<string | null>(null);
 
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+    const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
     useEffect(() => {
         fetchSessions();
@@ -54,20 +56,28 @@ export default function HistorySidebar({
         }
     };
 
-    const handleDelete = async (e: React.MouseEvent, id: string) => {
+    const handleDeleteClick = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        if (!confirm("정말 삭제하시겠습니까?")) return;
+        setSessionToDelete(id);
+        setDeleteModalOpen(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!sessionToDelete) return;
 
         try {
-            const res = await fetch(`${API_URL}/api/history/session/${id}`, {
+            const res = await fetch(`${API_URL}/api/history/session/${sessionToDelete}`, {
                 method: "DELETE",
             });
             if (res.ok) {
-                setSessions((prev) => prev.filter((s) => s.id !== id));
-                onDeleteSession(id);
+                setSessions((prev) => prev.filter((s) => s.id !== sessionToDelete));
+                onDeleteSession(sessionToDelete);
             }
         } catch (err) {
             console.error("Failed to delete session:", err);
+        } finally {
+            setDeleteModalOpen(false);
+            setSessionToDelete(null);
         }
     };
 
@@ -195,7 +205,7 @@ export default function HistorySidebar({
                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" /></svg>
                                     </button>
                                     <button
-                                        onClick={(e) => handleDelete(e, session.id)}
+                                        onClick={(e) => handleDeleteClick(e, session.id)}
                                         className="p-1 rounded hover:bg-red-100 text-stone-400 hover:text-red-500"
                                         title="Delete"
                                     >
@@ -207,6 +217,16 @@ export default function HistorySidebar({
                     )}
                 </div>
             </div>
+            <ConfirmModal
+                isOpen={deleteModalOpen}
+                onClose={() => setDeleteModalOpen(false)}
+                onConfirm={confirmDelete}
+                title="대화 삭제"
+                message="정말 이 대화를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+                confirmText="삭제"
+                cancelText="취소"
+                isDestructive={true}
+            />
         </div>
     );
 }

@@ -42,23 +42,43 @@ export default function Home() {
   const targetRef = useRef<HTMLDivElement>(null);
   const isScrollingRef = useRef<boolean>(false);
 
+  // Document Viewer State
+  const [viewingDocument, setViewingDocument] = useState<{ name: string; content: string } | null>(null);
+
+  // Clear attachments on tab switch
+  const handleTabChange = (tabId: string) => {
+    setActiveTab(tabId);
+    // Clear all file states
+    setAttachedFile(null);
+    setDocumentContext("");
+    setLlamaAttachedFile(null);
+    setLlamaDocumentContext("");
+    setExaoneAttachedFile(null);
+    setExaoneDocumentContext("");
+
+    // Reset inputs
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    if (llamaFileInputRef.current) llamaFileInputRef.current.value = "";
+    if (exaoneFileInputRef.current) exaoneFileInputRef.current.value = "";
+  };
+
   // Chat State
   const [chatInput, setChatInput] = useState("");
-  const [chatMessages, setChatMessages] = useState<{ role: string; content: string; reasoning?: string }[]>([]);
+  const [chatMessages, setChatMessages] = useState<{ role: string; content: string; reasoning?: string; attachedFile?: { name: string; content?: string } }[]>([]);
   const [isChatStreaming, setIsChatStreaming] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const [expandedReasoning, setExpandedReasoning] = useState<number | null>(null);
 
   // Llama 3.3 Chat State
   const [llamaInput, setLlamaInput] = useState("");
-  const [llamaMessages, setLlamaMessages] = useState<{ role: string; content: string }[]>([]);
+  const [llamaMessages, setLlamaMessages] = useState<{ role: string; content: string; attachedFile?: { name: string; content?: string } }[]>([]);
   const [isLlamaStreaming, setIsLlamaStreaming] = useState(false);
   const [llamaError, setLlamaError] = useState<string | null>(null);
   const llamaEndRef = useRef<HTMLDivElement>(null);
 
   // ExaOne Chat State
   const [exaoneInput, setExaoneInput] = useState("");
-  const [exaoneMessages, setExaoneMessages] = useState<{ role: string; content: string }[]>([]);
+  const [exaoneMessages, setExaoneMessages] = useState<{ role: string; content: string; attachedFile?: { name: string; content?: string } }[]>([]);
   const [isExaoneStreaming, setIsExaoneStreaming] = useState(false);
   const [exaoneError, setExaoneError] = useState<string | null>(null);
 
@@ -96,7 +116,7 @@ export default function Home() {
   const [debateSessionId, setDebateSessionId] = useState<string | null>(null); // New Debate Session State
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+  const API_URL = process.env.NEXT_PUBLIC_API_URL || "";
 
   // --- History Helper Functions ---
   const refreshHistory = () => setHistoryRefreshTrigger(prev => prev + 1);
@@ -110,47 +130,27 @@ export default function Home() {
       const messages = data.messages.map((m: any) => ({
         role: m.role,
         content: m.content,
-        reasoning: m.reasoning
+        reasoning: m.reasoning,
+        attachedFile: m.attached_file_name ? { name: m.attached_file_name, content: m.attached_file_context } : undefined
       }));
 
-      // Find the last message with attached file context (if any)
-      const lastMessageWithFile = [...data.messages].reverse().find(
-        (m: any) => m.attached_file_context && m.attached_file_name
-      );
 
-      // Update state based on model
+      // Removed auto-restore logic for attachments
       if (modelType === 'deepqwen') {
         setDeepqwenSessionId(sessionId);
         setChatMessages(messages);
-        // Restore document context if available
-        if (lastMessageWithFile) {
-          setDocumentContext(lastMessageWithFile.attached_file_context);
-          // Create a pseudo File object for display (actual file not available)
-          setAttachedFile({ name: lastMessageWithFile.attached_file_name } as File);
-        } else {
-          setDocumentContext("");
-          setAttachedFile(null);
-        }
+        setDocumentContext("");
+        setAttachedFile(null);
       } else if (modelType === 'llama') {
         setLlamaSessionId(sessionId);
         setLlamaMessages(messages);
-        if (lastMessageWithFile) {
-          setLlamaDocumentContext(lastMessageWithFile.attached_file_context);
-          setLlamaAttachedFile({ name: lastMessageWithFile.attached_file_name } as File);
-        } else {
-          setLlamaDocumentContext("");
-          setLlamaAttachedFile(null);
-        }
+        setLlamaDocumentContext("");
+        setLlamaAttachedFile(null);
       } else if (modelType === 'exaone') {
         setExaoneSessionId(sessionId);
         setExaoneMessages(messages);
-        if (lastMessageWithFile) {
-          setExaoneDocumentContext(lastMessageWithFile.attached_file_context);
-          setExaoneAttachedFile({ name: lastMessageWithFile.attached_file_name } as File);
-        } else {
-          setExaoneDocumentContext("");
-          setExaoneAttachedFile(null);
-        }
+        setExaoneDocumentContext("");
+        setExaoneAttachedFile(null);
       } else if (modelType === 'gemma') {
         setGemmaSessionId(sessionId);
         // Gemma currently uses translate mode, but if we add chat mode later:
@@ -408,7 +408,11 @@ export default function Home() {
   const handleChatSubmit = async () => {
     if (!chatInput.trim() || isChatStreaming) return;
 
-    const userMessage = { role: "user", content: chatInput };
+    const userMessage = {
+      role: "user",
+      content: chatInput,
+      attachedFile: attachedFile ? { name: attachedFile.name, content: documentContext } : undefined
+    };
     setChatMessages((prev) => [...prev, userMessage]);
     setChatInput("");
     setIsChatStreaming(true);
@@ -426,12 +430,16 @@ export default function Home() {
           messages: [...chatMessages, userMessage].map(({ role, content }) => ({ role, content })),
           model: "deepseek-r1:32b",
           document_context: documentContext || undefined,
-          session_id: deepqwenSessionId || undefined
+          session_id: deepqwenSessionId || undefined,
+          attached_file_name: attachedFile?.name || undefined
         }),
         signal: abortControllerRef.current.signal,
       });
 
       if (!response.ok) throw new Error("Chat failed");
+
+      // Clear attachment immediately after success to update UI
+      handleFileRemove();
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -509,7 +517,11 @@ export default function Home() {
   const handleLlamaSubmit = async () => {
     if (!llamaInput.trim() || isLlamaStreaming) return;
 
-    const userMessage = { role: "user", content: llamaInput };
+    const userMessage = {
+      role: "user",
+      content: llamaInput,
+      attachedFile: llamaAttachedFile ? { name: llamaAttachedFile.name, content: llamaDocumentContext } : undefined
+    };
     setLlamaMessages((prev) => [...prev, userMessage]);
     setLlamaInput("");
     setIsLlamaStreaming(true);
@@ -528,7 +540,8 @@ export default function Home() {
           messages: [...llamaMessages, userMessage].map(({ role, content }) => ({ role, content })),
           model: "llama3.3:70b-instruct-q3_K_M",
           document_context: llamaDocumentContext || undefined,
-          session_id: llamaSessionId || undefined
+          session_id: llamaSessionId || undefined,
+          attached_file_name: llamaAttachedFile?.name || undefined
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -537,6 +550,9 @@ export default function Home() {
         const errorText = await response.text();
         throw new Error(`Chat failed: ${response.status} ${errorText}`);
       }
+
+      // Clear attachment immediately after success to update UI
+      handleLlamaFileRemove();
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -605,7 +621,11 @@ export default function Home() {
   const handleExaoneSubmit = async () => {
     if (!exaoneInput.trim() || isExaoneStreaming) return;
 
-    const userMessage = { role: "user", content: exaoneInput };
+    const userMessage = {
+      role: "user",
+      content: exaoneInput,
+      attachedFile: exaoneAttachedFile ? { name: exaoneAttachedFile.name, content: exaoneDocumentContext } : undefined
+    };
     setExaoneMessages((prev) => [...prev, userMessage]);
     setExaoneInput("");
     setIsExaoneStreaming(true);
@@ -625,7 +645,8 @@ export default function Home() {
           // Use the clean alias we will create
           model: "exaone4.0:32b",
           document_context: exaoneDocumentContext || undefined,
-          session_id: exaoneSessionId || undefined
+          session_id: exaoneSessionId || undefined,
+          attached_file_name: exaoneAttachedFile?.name || undefined
         }),
         signal: abortControllerRef.current.signal,
       });
@@ -634,6 +655,9 @@ export default function Home() {
         const errorText = await response.text();
         throw new Error(`Chat failed: ${response.status} ${errorText}`);
       }
+
+      // Clear attachment immediately after success to update UI
+      handleExaoneFileRemove();
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -827,7 +851,7 @@ export default function Home() {
   return (
     <div className="gradient-bg h-screen w-screen flex overflow-hidden">
       {/* Sidebar */}
-      <Sidebar activeId={activeTab} onSelect={setActiveTab} />
+      <Sidebar activeId={activeTab} onSelect={handleTabChange} />
 
       {/* content-area */}
       <div className="flex-1 p-3 flex flex-col items-center justify-center overflow-hidden">
@@ -1067,6 +1091,16 @@ export default function Home() {
                         ) : (
                           msg.content
                         )}
+                        {msg.role === "user" && msg.attachedFile && (
+                          <button
+                            onClick={() => msg.attachedFile && setViewingDocument({ name: msg.attachedFile.name, content: msg.attachedFile.content || "" })}
+                            className="mt-2 text-xs flex items-center gap-1 bg-white/20 px-2 py-1 rounded text-orange-50 hover:bg-white/30 transition-colors text-left"
+                            title="문서 내용 보기"
+                          >
+                            <span>📎 {msg.attachedFile.name}</span>
+                            <span className="opacity-60 text-[10px] ml-1">(클릭하여 보기)</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1118,32 +1152,37 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="flex gap-2 max-w-4xl mx-auto">
+                <div className="flex gap-2 max-w-4xl mx-auto items-center">
                   {/* File Attachment Button */}
                   <button
                     onClick={() => exaoneFileInputRef.current?.click()}
-                    className="bg-white/70 border border-white/40 p-3 rounded-xl hover:bg-orange-50 transition-colors shadow-inner"
+                    className="aspect-square bg-white/70 border border-white/40 p-3 rounded-xl hover:bg-orange-50 transition-colors shadow-inner flex items-center justify-center self-center"
                     title="문서 첨부 (PDF, TXT, DOCX)"
                     disabled={isExaoneStreaming}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-500"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-orange-500"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>
                   </button>
-                  <input
-                    type="text"
+                  <textarea
                     value={exaoneInput}
                     onChange={(e) => setExaoneInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleExaoneSubmit()}
+                    onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleExaoneSubmit();
+                      }
+                    }}
                     placeholder="ExaOne에게 메시지 보내기..."
-                    className="flex-1 bg-white/70 border-white/40 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-200 shadow-inner"
+                    className="flex-1 bg-white/70 border-white/40 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-200 shadow-inner resize-none h-28"
                     disabled={isExaoneStreaming}
                   />
                   {isExaoneStreaming ? (
-                    <button onClick={handleStop} className="bg-red-500 text-white p-3 rounded-xl hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20">
+                    <button onClick={handleStop} className="aspect-square bg-red-500 text-white p-3 rounded-xl hover:bg-red-600 transition-colors shadow-lg shadow-red-500/20 flex items-center justify-center self-center">
                       Stop
                     </button>
                   ) : (
-                    <button onClick={handleExaoneSubmit} className="bg-gradient-to-r from-orange-400 to-rose-400 text-white p-3 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-orange-500/20">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                    <button onClick={handleExaoneSubmit} className="aspect-square bg-gradient-to-r from-orange-400 to-rose-400 text-white p-3 rounded-xl hover:opacity-90 transition-opacity shadow-lg shadow-orange-500/20 flex items-center justify-center self-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                     </button>
                   )}
                 </div>
@@ -1219,6 +1258,16 @@ export default function Home() {
                         ) : (
                           msg.content
                         )}
+                        {msg.role === "user" && msg.attachedFile && (
+                          <button
+                            onClick={() => msg.attachedFile && setViewingDocument({ name: msg.attachedFile.name, content: msg.attachedFile.content || "" })}
+                            className="mt-2 text-xs flex items-center gap-1 bg-white/20 px-2 py-1 rounded text-orange-50 hover:bg-white/30 transition-colors text-left"
+                            title="문서 내용 보기"
+                          >
+                            <span>📎 {msg.attachedFile.name}</span>
+                            <span className="opacity-60 text-[10px] ml-1">(클릭하여 보기)</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1272,15 +1321,15 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="flex gap-2 relative">
+                <div className="flex gap-2 relative items-center">
                   {/* Attach File Button */}
                   <button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isUploading}
-                    className="bg-white border border-stone-200 text-stone-500 rounded-xl px-3 hover:bg-stone-50 hover:text-orange-500 hover:border-orange-300 disabled:opacity-50 transition-all"
+                    className="aspect-square bg-white border border-stone-200 text-stone-500 rounded-xl px-3 hover:bg-stone-50 hover:text-orange-500 hover:border-orange-300 disabled:opacity-50 transition-all flex items-center justify-center self-center"
                     title="파일 첨부 (PDF, TXT, DOCX)"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                     </svg>
                   </button>
@@ -1289,22 +1338,23 @@ export default function Home() {
                     value={chatInput}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleChatSubmit();
                       }
                     }}
                     placeholder={attachedFile ? "첨부된 문서에 대해 질문하세요..." : "Type your message..."}
-                    className="flex-1 bg-white border-none rounded-xl p-3 shadow-inner focus:ring-2 focus:ring-orange-500/50 resize-none h-14"
+                    className="flex-1 bg-white border-none rounded-xl p-3 shadow-inner focus:ring-2 focus:ring-orange-500/50 resize-none h-28"
                   />
 
                   {isChatStreaming ? (
                     <button
                       onClick={handleStop}
-                      className="bg-red-500 text-white rounded-xl px-4 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95 animate-pulse"
+                      className="aspect-square bg-red-500 text-white rounded-xl px-4 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95 animate-pulse flex items-center justify-center self-center"
                       title="Stop Generating"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0" strokeLinecap="round" strokeLinejoin="round">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="6" y="6" width="12" height="12" rx="2" />
                       </svg>
                     </button>
@@ -1312,9 +1362,9 @@ export default function Home() {
                     <button
                       onClick={handleChatSubmit}
                       disabled={!chatInput.trim()}
-                      className="bg-orange-500 text-white rounded-xl px-4 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/30 transition-all active:scale-95"
+                      className="aspect-square bg-orange-500 text-white rounded-xl px-4 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/30 transition-all active:scale-95 flex items-center justify-center self-center"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                     </button>
                   )}
                 </div>
@@ -1371,6 +1421,16 @@ export default function Home() {
                         ) : (
                           msg.content
                         )}
+                        {msg.role === "user" && msg.attachedFile && (
+                          <button
+                            onClick={() => msg.attachedFile && setViewingDocument({ name: msg.attachedFile.name, content: msg.attachedFile.content || "" })}
+                            className="mt-2 text-xs flex items-center gap-1 bg-white/20 px-2 py-1 rounded text-orange-50 hover:bg-white/30 transition-colors text-left"
+                            title="문서 내용 보기"
+                          >
+                            <span>📎 {msg.attachedFile.name}</span>
+                            <span className="opacity-60 text-[10px] ml-1">(클릭하여 보기)</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1424,15 +1484,15 @@ export default function Home() {
                   </div>
                 )}
 
-                <div className="flex gap-2 relative">
+                <div className="flex gap-2 relative items-center">
                   {/* Attach File Button (Llama) */}
                   <button
                     onClick={() => llamaFileInputRef.current?.click()}
                     disabled={isLlamaUploading}
-                    className="bg-white border border-stone-200 text-stone-500 rounded-xl px-3 hover:bg-stone-50 hover:text-orange-500 hover:border-orange-300 disabled:opacity-50 transition-all"
+                    className="aspect-square bg-white border border-stone-200 text-stone-500 rounded-xl px-3 hover:bg-stone-50 hover:text-orange-500 hover:border-orange-300 disabled:opacity-50 transition-all flex items-center justify-center self-center"
                     title="파일 첨부 (PDF, TXT, DOCX)"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
                     </svg>
                   </button>
@@ -1441,22 +1501,23 @@ export default function Home() {
                     value={llamaInput}
                     onChange={(e) => setLlamaInput(e.target.value)}
                     onKeyDown={(e) => {
+                      if (e.nativeEvent.isComposing) return;
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
                         handleLlamaSubmit();
                       }
                     }}
                     placeholder={llamaAttachedFile ? "첨부된 문서에 대해 질문하세요..." : "Type your message..."}
-                    className="flex-1 bg-white border-none rounded-xl p-3 shadow-inner focus:ring-2 focus:ring-orange-500/50 resize-none h-14"
+                    className="flex-1 bg-white border-none rounded-xl p-3 shadow-inner focus:ring-2 focus:ring-orange-500/50 resize-none h-28"
                   />
 
                   {isLlamaStreaming ? (
                     <button
                       onClick={handleStop}
-                      className="bg-red-500 text-white rounded-xl px-4 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95 animate-pulse"
+                      className="aspect-square bg-red-500 text-white rounded-xl px-4 hover:bg-red-600 shadow-lg shadow-red-500/30 transition-all active:scale-95 animate-pulse flex items-center justify-center self-center"
                       title="Stop Generating"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0" strokeLinecap="round" strokeLinejoin="round">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="6" y="6" width="12" height="12" rx="2" />
                       </svg>
                     </button>
@@ -1464,9 +1525,9 @@ export default function Home() {
                     <button
                       onClick={handleLlamaSubmit}
                       disabled={!llamaInput.trim()}
-                      className="bg-orange-500 text-white rounded-xl px-4 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/30 transition-all active:scale-95"
+                      className="aspect-square bg-orange-500 text-white rounded-xl px-4 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-orange-500/30 transition-all active:scale-95 flex items-center justify-center self-center"
                     >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
                     </button>
                   )}
                 </div>
@@ -1509,6 +1570,76 @@ export default function Home() {
           </div>
         )}
       </div>
+
+      {/* Document Viewer Modal */}
+      {viewingDocument && (
+        <DocumentViewerModal
+          isOpen={!!viewingDocument}
+          onClose={() => setViewingDocument(null)}
+          fileName={viewingDocument.name}
+          content={viewingDocument.content}
+        />
+      )}
     </div>
   );
 }
+
+const DocumentViewerModal = ({ isOpen, onClose, fileName, content }: { isOpen: boolean; onClose: () => void; fileName: string; content: string }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden animate-scale-in border border-white/20">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-stone-100 bg-stone-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center text-orange-500">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                <polyline points="14 2 14 8 20 8" />
+                <line x1="16" y1="13" x2="8" y2="13" />
+                <line x1="16" y1="17" x2="8" y2="17" />
+                <polyline points="10 9 9 9 8 9" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="font-bold text-stone-800 text-lg truncate max-w-md">{fileName}</h3>
+              <p className="text-xs text-stone-500">문서 텍스트 미리보기</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-full hover:bg-stone-200 text-stone-400 hover:text-stone-600 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto p-8 bg-white">
+          <div className="max-w-3xl mx-auto prose prose-stone prose-headings:font-bold prose-a:text-orange-500 hover:prose-a:text-orange-600">
+            {content ? (
+              <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed text-stone-700 bg-stone-50 p-6 rounded-xl border border-stone-100">
+                {content}
+              </pre>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-64 text-stone-400">
+                <p>문서 내용을 불러올 수 없습니다. (내용 없음)</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-4 border-t border-stone-100 bg-stone-50 flex justify-end">
+          <button
+            onClick={onClose}
+            className="px-6 py-2 bg-stone-800 text-white rounded-xl hover:bg-stone-700 transition-colors shadow-lg shadow-stone-500/10 font-medium"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

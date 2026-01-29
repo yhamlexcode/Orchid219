@@ -66,7 +66,7 @@ async def get_session_detail(session_id: str, db: AsyncSession = Depends(get_db)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid UUID format")
 
-    query = select(ChatSession).where(ChatSession.id == uuid_id).options(selectinload(ChatSession.messages))
+    # query = select(ChatSession).where(ChatSession.id == uuid_id).options(selectinload(ChatSession.messages))
     # Note: We need relationship in models.py for selectinload, adding it below implicitly or manually querying messages
     # Let's manually query to avoid circular dependency or complex model setup for now if relationship is missing
     # Actually checking models.py -> relationship is missing. Let's fix models.py first or query separately.

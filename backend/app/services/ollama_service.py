@@ -139,3 +139,53 @@ class OllamaService:
                         except Exception as e:
                             print(f"Error processing chunk: {e}")
                             continue
+
+    async def generate_title(self, user_content: str, assistant_content: str, model: str) -> str:
+        """
+        Generate a concise title for the chat session based on the first interaction.
+        """
+        print(f"DEBUG: Entering generate_title with model={model}")
+        prompt = f"""Generate a very concise title (maximum 5-7 words) for this chat conversation.
+Do not use quotes. Do not saying "Title: ". Just the title itself.
+
+User: {user_content[:200]}...
+AI: {assistant_content[:200]}...
+
+Title:"""
+        
+        target_model = model or "deepseek-r1:32b"
+        
+        try:
+            print(f"DEBUG: Calling Ollama API for title...")
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/chat",
+                    json={
+                        "model": target_model,
+                        "messages": [{"role": "user", "content": prompt}],
+                        "stream": False,
+                        "options": {
+                            "temperature": 0.3,
+                        }
+                    }
+                )
+                print(f"DEBUG: Ollama response status: {response.status_code}")
+                if response.status_code == 200:
+                    data = response.json()
+                    content = data.get("message", {}).get("content", "").strip()
+                    
+                    if "<think>" in content:
+                        parts = content.split("</think>")
+                        if len(parts) > 1:
+                            content = parts[1].strip()
+                    
+                    content = content.strip('"').strip("'")
+                    print(f"DEBUG: Generated title: {content}")
+                    
+                    return content if content else "New Chat"
+        except Exception as e:
+            print(f"Error generating title: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return "New Chat"
